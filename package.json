@@ -1,0 +1,9 @@
+{
+  "name": "sixseven-superhero",
+  "private": true,
+  "version": "1.0.0",
+  "description": "67 superhero character — 3D viewer + playable movable version",
+  "scripts": {
+    "dev": "node dev-server.js"
+  }
+}

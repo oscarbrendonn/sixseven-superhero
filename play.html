@@ -1,0 +1,272 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>67 — Superhero | Oyna</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#f4efe7;color:#2a2724;
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    -webkit-user-select:none;user-select:none;touch-action:none}
+  #app{position:fixed;inset:0}
+  canvas{display:block}
+  header{position:fixed;top:0;left:0;right:0;padding:14px 18px;z-index:5;pointer-events:none;
+    background:linear-gradient(rgba(244,239,231,.95) 40%,transparent);letter-spacing:.04em;
+    display:flex;justify-content:space-between;align-items:flex-start}
+  header b{font-weight:600}
+  header a{pointer-events:auto;color:#2a2724;text-decoration:none;border:1px solid #2a272433;
+    padding:4px 12px;border-radius:999px;font-size:12px;background:#fff8}
+  #help{position:fixed;left:18px;bottom:16px;z-index:5;pointer-events:none;
+    font-size:12px;color:#2a2724aa;letter-spacing:.03em}
+  #help kbd{display:inline-block;border:1px solid #2a272433;border-bottom-width:2px;border-radius:5px;
+    padding:0 6px;margin:0 1px;background:#fff;font:11px/1.7 ui-monospace,Menlo,monospace;color:#2a2724}
+  #loading{position:fixed;inset:0;z-index:9;display:flex;align-items:center;justify-content:center;
+    background:#f4efe7;transition:opacity .5s;letter-spacing:.15em;font-size:12px;color:#2a272488}
+  /* mobil joystick */
+  #stick{position:fixed;z-index:6;width:110px;height:110px;border-radius:50%;
+    border:1.5px solid #2a27242e;background:#ffffff55;display:none;left:26px;bottom:64px}
+  #knob{position:absolute;width:46px;height:46px;border-radius:50%;background:#2a2724cc;
+    left:32px;top:32px}
+  #jump{position:fixed;z-index:6;width:64px;height:64px;border-radius:50%;display:none;
+    right:30px;bottom:78px;border:1.5px solid #2a27242e;background:#ffffffaa;
+    font-size:11px;letter-spacing:.1em;color:#2a2724}
+  @media (pointer:coarse){ #stick,#jump{display:block} #help{display:none} }
+</style>
+
+<header>
+  <b>67 — Superhero&nbsp;·&nbsp;Oyna</b>
+  <a href="index.html">← 3B Görüntüleyici</a>
+</header>
+<div id="app"></div>
+<div id="loading">YÜKLENİYOR…</div>
+<div id="help">
+  <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / ok tuşları hareket &nbsp;·&nbsp;
+  <kbd>Shift</kbd> koş &nbsp;·&nbsp; <kbd>Space</kbd> zıpla &nbsp;·&nbsp; sürükle: kamera
+</div>
+<div id="stick"><div id="knob"></div></div>
+<button id="jump">ZIPLA</button>
+
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+const app = document.getElementById('app');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xf4efe7);
+scene.fog = new THREE.Fog(0xf4efe7, 30, 90);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 200);
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+app.appendChild(renderer.domElement);
+
+/* ışıklar */
+scene.add(new THREE.HemisphereLight(0xfff6e8, 0xcfc4b2, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+sun.position.set(8, 14, 6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = sun.shadow.camera.bottom = -25;
+sun.shadow.camera.right = sun.shadow.camera.top = 25;
+sun.shadow.camera.far = 60;
+sun.shadow.bias = -0.0004;
+scene.add(sun);
+
+/* zemin */
+const ground = new THREE.Mesh(
+  new THREE.CircleGeometry(60, 64),
+  new THREE.MeshStandardMaterial({ color:0xe7dfcf, roughness:1 }));
+ground.rotation.x = -Math.PI/2;
+ground.receiveShadow = true;
+scene.add(ground);
+const grid = new THREE.PolarGridHelper(60, 16, 12, 64, 0x2a2724, 0x2a2724);
+grid.material.transparent = true; grid.material.opacity = 0.07;
+grid.position.y = 0.01;
+scene.add(grid);
+
+/* dekoratif engeller (dairesel çarpışma) */
+const obstacles = [];
+const boxMat = new THREE.MeshStandardMaterial({ color:0xd8cdb8, roughness:.9 });
+const capMat  = new THREE.MeshStandardMaterial({ color:0xb8ab90, roughness:.9 });
+function addBlock(x, z, s, h){
+  const m = new THREE.Mesh(new THREE.BoxGeometry(s, h, s), boxMat);
+  m.position.set(x, h/2, z); m.castShadow = m.receiveShadow = true;
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(s*1.08, .12, s*1.08), capMat);
+  cap.position.y = h/2 + .06; cap.castShadow = true; m.add(cap);
+  scene.add(m);
+  obstacles.push({ x, z, r: s*.72 });
+}
+addBlock( 6, -4, 2.2, 1.2);  addBlock(-7, -6, 3.0, 2.0);
+addBlock(-4,  7, 1.8, 0.9);  addBlock( 8,  6, 2.6, 1.6);
+addBlock( 0,-12, 3.4, 1.1);  addBlock(12,  1, 1.6, 2.4);
+addBlock(-12, 2, 2.0, 1.4);  addBlock( 3, 12, 2.4, 1.0);
+
+/* karakter — Meshy auto-rig'li, 7 animasyon klipli (idle/walk/run/jump/fall/land/celebrate) */
+const hero = new THREE.Group();
+scene.add(hero);
+let heroReady = false;
+let mixer = null;
+const actions = {};
+let currentAction = null;
+
+function playClip(name, fade = 0.18){
+  const next = actions[name];
+  if (!next || currentAction === next) return;
+  next.reset().fadeIn(fade).play();
+  currentAction?.fadeOut(fade);
+  currentAction = next;
+}
+
+new GLTFLoader().load('hero-animated.glb', (g) => {
+  const model = g.scene;
+  // boyutlandır: ~1.7 birim boy, ayaklar y=0
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3());
+  const scale = 1.7 / size.y;
+  model.scale.setScalar(scale);
+  box.setFromObject(model);
+  const c = box.getCenter(new THREE.Vector3());
+  model.position.sub(new THREE.Vector3(c.x, box.min.y, c.z));
+  model.traverse(o => { if (o.isMesh){ o.castShadow = true; o.receiveShadow = false; } });
+  hero.add(model);
+  mixer = new THREE.AnimationMixer(model);
+  for (const clip of g.animations) actions[clip.name] = mixer.clipAction(clip);
+  for (const once of ['jump', 'land', 'celebrate']){
+    if (actions[once]){ actions[once].setLoop(THREE.LoopOnce, 1); actions[once].clampWhenFinished = true; }
+  }
+  playClip('idle');
+  heroReady = true;
+  document.getElementById('loading').style.opacity = 0;
+  setTimeout(()=>document.getElementById('loading').remove(), 600);
+});
+
+/* giriş */
+const keys = {};
+addEventListener('keydown', e => { keys[e.code] = true;
+  if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault(); });
+addEventListener('keyup',   e => { keys[e.code] = false; });
+
+/* mobil joystick */
+const stick = document.getElementById('stick'), knob = document.getElementById('knob');
+const joy = { x:0, y:0, id:null };
+let joyJump = false;
+document.getElementById('jump').addEventListener('pointerdown', () => joyJump = true);
+stick.addEventListener('pointerdown', e => { joy.id = e.pointerId; stick.setPointerCapture(e.pointerId); });
+stick.addEventListener('pointermove', e => {
+  if (e.pointerId !== joy.id) return;
+  const r = stick.getBoundingClientRect();
+  let dx = e.clientX - (r.left + r.width/2), dy = e.clientY - (r.top + r.height/2);
+  const m = Math.hypot(dx, dy), max = r.width/2 - 10;
+  if (m > max){ dx *= max/m; dy *= max/m; }
+  knob.style.left = 32 + dx + 'px'; knob.style.top = 32 + dy + 'px';
+  joy.x = dx/max; joy.y = dy/max;
+});
+const joyEnd = e => { if (e.pointerId !== joy.id) return;
+  joy.id = null; joy.x = joy.y = 0; knob.style.left = '32px'; knob.style.top = '32px'; };
+stick.addEventListener('pointerup', joyEnd);
+stick.addEventListener('pointercancel', joyEnd);
+
+/* kamera yörüngesi (sürükle) */
+let camYaw = 0, camPitch = 0.32, camDist = 5.2, dragging = false, px = 0, py = 0;
+addEventListener('pointerdown', e => { if (e.target === renderer.domElement){ dragging = true; px = e.clientX; py = e.clientY; } });
+addEventListener('pointermove', e => { if (!dragging) return;
+  camYaw   -= (e.clientX - px) * 0.005;
+  camPitch  = THREE.MathUtils.clamp(camPitch + (e.clientY - py) * 0.004, 0.08, 1.1);
+  px = e.clientX; py = e.clientY; });
+addEventListener('pointerup', () => dragging = false);
+addEventListener('wheel', e => { camDist = THREE.MathUtils.clamp(camDist + e.deltaY*0.004, 3, 10); });
+
+/* hareket durumu */
+const pos = new THREE.Vector3(0, 0, 4);
+let vy = 0, grounded = true, heading = Math.PI, bobT = 0;
+
+const clock = new THREE.Clock();
+function tick(){
+  requestAnimationFrame(tick);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+
+  // giriş yönü (kameraya göreli)
+  let ix = (keys.KeyD||keys.ArrowRight?1:0) - (keys.KeyA||keys.ArrowLeft?1:0) + joy.x;
+  let iz = (keys.KeyS||keys.ArrowDown?1:0) - (keys.KeyW||keys.ArrowUp?1:0) + joy.y;
+  const mag = Math.min(Math.hypot(ix, iz), 1);
+  const run = keys.ShiftLeft || keys.ShiftRight;
+  const speed = run ? 7.5 : 4.2;
+
+  if (mag > 0.05){
+    const ang = Math.atan2(ix, iz) + camYaw;      // dünya yönü
+    const targetHeading = ang + Math.PI;          // model +Z ileri varsayımı
+    let d = targetHeading - heading;
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    heading += d * Math.min(1, dt*12);
+    pos.x += Math.sin(ang) * speed * mag * dt;
+    pos.z += Math.cos(ang) * speed * mag * dt;
+    bobT += dt * (run ? 13 : 9);
+  } else {
+    bobT += dt * 2;
+  }
+
+  // engel çarpışması (2B daireler)
+  for (const o of obstacles){
+    const dx = pos.x - o.x, dz = pos.z - o.z;
+    const dist = Math.hypot(dx, dz), min = o.r + 0.45;
+    if (dist < min && dist > 1e-4){
+      pos.x = o.x + dx/dist * min;
+      pos.z = o.z + dz/dist * min;
+    }
+  }
+  const R = Math.hypot(pos.x, pos.z);             // arena sınırı
+  if (R > 55){ pos.x *= 55/R; pos.z *= 55/R; }
+
+  // zıplama / yerçekimi
+  let justJumped = false, justLanded = false;
+  if ((keys.Space || joyJump) && grounded){ vy = 6.4; grounded = false; justJumped = true; }
+  joyJump = false;
+  vy -= 18 * dt;
+  pos.y += vy * dt;
+  if (pos.y <= 0){ if (!grounded) justLanded = true; pos.y = 0; vy = 0; grounded = true; }
+
+  // karaktere uygula + animasyon klipleri
+  hero.position.copy(pos);
+  hero.rotation.y = heading;
+  if (heroReady && mixer){
+    const moving = mag > 0.05;
+    if (!grounded){
+      if (justJumped) playClip('jump', 0.08);
+      else if (vy < -2) playClip('fall', 0.15);
+    } else if (justLanded && actions.land){
+      playClip('land', 0.06);
+    } else if (currentAction !== actions.land || actions.land?.paused || !actions.land?.isRunning()){
+      if (moving) playClip(run ? 'run' : 'walk');
+      else playClip('idle');
+    }
+    if (moving && grounded && currentAction === actions.walk) currentAction.timeScale = 0.8 + mag*0.5;
+    mixer.update(dt);
+  }
+
+  // kamera takibi
+  const cx = pos.x - Math.sin(camYaw) * Math.cos(camPitch) * camDist;
+  const cz = pos.z - Math.cos(camYaw) * Math.cos(camPitch) * camDist;
+  const cy = pos.y + Math.sin(camPitch) * camDist + 1.2;
+  camera.position.lerp(new THREE.Vector3(cx, cy, cz), Math.min(1, dt*6));
+  camera.lookAt(pos.x, pos.y + 1.3, pos.z);
+  sun.position.set(pos.x + 8, 14, pos.z + 6);                  // gölge hep yakında
+  sun.target.position.copy(pos); sun.target.updateMatrixWorld();
+
+  renderer.render(scene, camera);
+}
+tick();
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
