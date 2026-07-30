@@ -1,0 +1,27 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>67 — Superhero</title>
+<script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"></script>
+<style>
+  html,body{margin:0;height:100%;background:#f4efe7;color:#2a2724;
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+  header{position:fixed;top:0;left:0;right:0;padding:14px 18px;z-index:5;
+    background:linear-gradient(#f4efe7 55%,transparent);letter-spacing:.04em}
+  header b{font-weight:600}
+  model-viewer{width:100%;height:100%;background:#f4efe7;--poster-color:#f4efe7}
+</style>
+<header><b>67 — Superhero</b></header>
+<model-viewer
+  src="model.glb"
+  alt="67 superhero character"
+  camera-controls
+  auto-rotate
+  touch-action="pan-y"
+  shadow-intensity="0.6"
+  exposure="1.0"
+  environment-image="neutral"
+  camera-orbit="0deg 85deg 3.6m"
+  min-camera-orbit="auto 0deg auto"
+  max-camera-orbit="auto 180deg auto"
+  field-of-view="30deg">
+</model-viewer>
