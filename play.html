@@ -124,7 +124,7 @@ function playClip(name, fade = 0.18){
   currentAction = next;
 }
 
-new GLTFLoader().load('hero-animated.glb', (g) => {
+new GLTFLoader().load('hero-v5.glb', (g) => {
   const model = g.scene;
   // boyutlandır: ~1.7 birim boy, ayaklar y=0
   const box = new THREE.Box3().setFromObject(model);
